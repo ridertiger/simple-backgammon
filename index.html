@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Backgammon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
+        
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+        }
+        .title-font {
+            font-family: 'Space Grotesk', 'Inter', sans-serif;
+            font-weight: 600;
+        }
+
+        #game-board {
+            border: 8px solid #334155;
+            border-radius: 12px;
+            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4);
+            background: #1e2937;
+        }
+
+        .dice {
+            width: 70px;
+            height: 70px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3), inset 0 2px 4px 0 rgb(255 255 255);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e2937;
+            border: 3px solid #64748b;
+        }
+
+        .point {
+            transition: all 0.1s ease;
+        }
+
+        .piece {
+            transition: transform 0.2s ease;
+        }
+
+        .legal-move {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .backgammon-board {
+            background: linear-gradient(#334155, #1e2937);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200">
+    <div class="max-w-[1100px] mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="title-font text-5xl font-semibold tracking-tighter">Backgammon</h1>
+                <p class="text-slate-400 mt-1">Simple • Playable • Classic</p>
+            </div>
+            
+            <div class="flex items-center gap-x-3">
+                <div class="bg-slate-900 rounded-2xl px-5 py-2 flex items-center gap-x-2 border border-slate-800">
+                    <div class="w-3 h-3 bg-white rounded-full"></div>
+                    <span class="font-medium" id="white-player">White (You)</span>
+                </div>
+                <div class="bg-slate-900 rounded-2xl px-5 py-2 flex items-center gap-x-2 border border-slate-800">
+                    <div class="w-3 h-3 bg-rose-500 rounded-full"></div>
+                    <span class="font-medium" id="black-player">Black</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Status -->
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-x-4">
+                <div id="turn-indicator" 
+                     class="px-6 py-2 bg-slate-900 border border-slate-700 rounded-2xl font-semibold flex items-center gap-x-2">
+                    <span id="current-turn-text">White's Turn</span>
+                </div>
+                
+                <div class="flex items-center gap-x-2">
+                    <!-- Dice -->
+                    <div id="dice-container" class="flex gap-x-3">
+                        <div id="die1" class="dice">?</div>
+                        <div id="die2" class="dice">?</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-x-3">
+                <button onclick="rollDice()" 
+                        class="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 transition-all font-semibold rounded-2xl flex items-center gap-x-2 shadow-lg shadow-emerald-900/30">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7-7 7m-4-7l7 7-7 7" />
+                    </svg>
+                    <span>Roll Dice</span>
+                </button>
+                
+                <button onclick="endTurn()" 
+                        class="px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold rounded-2xl transition-all">
+                    End Turn
+                </button>
+                
+                <button onclick="restartGame()" 
+                        class="px-5 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold rounded-2xl transition-all text-sm">
+                    Restart
+                </button>
+            </div>
+        </div>
+
+        <!-- Board -->
+        <div class="flex justify-center">
+            <canvas id="board" width="920" height="560" class="rounded-3xl cursor-pointer shadow-2xl"></canvas>
+        </div>
+
+        <!-- Status & Instructions -->
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                <div class="text-xs uppercase tracking-widest text-slate-500 mb-1">STATUS</div>
+                <div id="status-text" class="font-medium text-lg">Roll the dice to start</div>
+            </div>
+            
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 col-span-2">
+                <div class="text-xs uppercase tracking-widest text-slate-500 mb-2">HOW TO PLAY</div>
+                <div class="text-sm text-slate-300 leading-relaxed">
+                    1. Roll the dice → 2. Click one of <span class="text-white font-medium">your pieces</span> → 
+                    3. Click a <span class="text-emerald-400 font-medium">highlighted</span> legal destination → 
+                    4. Repeat until dice are used → 5. Click <span class="font-semibold">End Turn</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 text-center text-xs text-slate-500">
+            White moves 1 → 24 &nbsp;&bull;&nbsp; Black moves 24 → 1 &nbsp;&bull;&nbsp; Bear off when all pieces are in your home board
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        let board = new Array(25).fill(0); // 1-24 points. Positive = White pieces, Negative = Black pieces
+        let bar = { white: 0, black: 0 };
+        let off = { white: 0, black: 0 };
+        let currentPlayer = 'white';
+        let dice = [0, 0];
+        let diceUsed = [false, false];
+        let selectedPoint = null;
+        let legalMoves = [];
+
+        const canvas = document.getElementById('board');
+        const ctx = canvas.getContext('2d');
+
+        // Colors
+        const COLORS = {
+            white: '#f8fafc',
+            black: '#e11d48',
+            boardDark: '#1e2937',
+            boardLight: '#334155',
+            pointLight: '#475569',
+            pointDark: '#64748b',
+            highlight: '#22c55e',
+            bar: '#475569'
+        };
+
+        function initGame() {
+            // Standard Backgammon starting position
+            // White (positive) moves 1->24, home = 19-24
+            // Black (negative) moves 24->1, home = 1-6
+            board.fill(0);
+            
+            // White pieces
+            board[1] = 2;   // 2 on point 1? Wait, standard is different.
+            // Correct standard setup:
+            // White: 5 on 6, 3 on 8, 5 on 13, 2 on 24
+            // Black: 5 on 19, 3 on 17, 5 on 12, 2 on 1   (mirrored)
+            
+            board[6] = 5;   // White
+            board[8] = 3;   // White
+            board[13] = 5;  // White
+            board[24] = 2;  // White
+            
+            board[19] = -5; // Black
+            board[17] = -3; // Black
+            board[12] = -5; // Black
+            board[1] = -2;  // Black
+            
+            bar.white = 0;
+            bar.black = 0;
+            off.white = 0;
+            off.black = 0;
+            
+            currentPlayer = 'white';
+            dice = [0, 0];
+            diceUsed = [false, false];
+            selectedPoint = null;
+            legalMoves = [];
+            
+            updateUI();
+            drawBoard();
+        }
+
+        function updateUI() {
+            // Turn indicator
+            const turnEl = document.getElementById('current-turn-text');
+            const statusEl = document.getElementById('status-text');
+            
+            if (currentPlayer === 'white') {
+                turnEl.innerHTML = `White's Turn`;
+                turnEl.parentElement.style.borderColor = '#64748b';
+            } else {
+                turnEl.innerHTML = `Black's Turn`;
+                turnEl.parentElement.style.borderColor = '#e11d48';
+            }
+
+            // Status
+            if (dice[0] === 0) {
+                statusEl.textContent = 'Roll the dice to begin your turn';
+            } else {
+                const remaining = diceUsed.filter(u => !u).length;
+                statusEl.textContent = `${remaining} move${remaining !== 1 ? 's' : ''} remaining`;
+            }
+
+            // Dice display
+            document.getElementById('die1').textContent = dice[0] || '?';
+            document.getElementById('die2').textContent = dice[1] || '?';
+            
+            if (dice[0] > 0) {
+                document.getElementById('die1').style.borderColor = diceUsed[0] ? '#64748b' : '#22c55e';
+                document.getElementById('die2').style.borderColor = diceUsed[1] ? '#64748b' : '#22c55e';
+            }
+        }
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const w = canvas.width;
+            const h = canvas.height;
+            const margin = 30;
+            const boardWidth = w - margin * 2;
+            const boardHeight = h - margin * 2;
+            
+            // Background
+            ctx.fillStyle = COLORS.boardDark;
+            ctx.fillRect(margin, margin, boardWidth, boardHeight);
+            
+            // Border
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(margin, margin, boardWidth, boardHeight);
+            
+            // Divide into two halves
+            const halfWidth = boardWidth / 2;
+            const pointWidth = halfWidth / 6;
+            const pointHeight = boardHeight * 0.42;
+            
+            // Draw 24 points
+            for (let i = 1; i <= 24; i++) {
+                const isTop = i > 12;
+                const col = ((i - 1) % 12);
+                const x = margin + (col * pointWidth) + (i > 12 ? halfWidth : 0);
+                
+                let y = margin;
+                if (!isTop) y = margin + boardHeight - pointHeight;
+                
+                // Alternate colors
+                const isEven = (col % 2 === 0);
+                ctx.fillStyle = isEven ? COLORS.pointLight : COLORS.pointDark;
+                
+                // Draw triangle
+                ctx.beginPath();
+                if (isTop) {
+                    // Pointing down
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + pointWidth/2, y + pointHeight);
+                    ctx.lineTo(x + pointWidth, y);
+                } else {
+                    // Pointing up
+                    ctx.moveTo(x, y + pointHeight);
+                    ctx.lineTo(x + pointWidth/2, y);
+                    ctx.lineTo(x + pointWidth, y + pointHeight);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                // Point border
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                
+                // Draw pieces on this point
+                const pieces = board[i];
+                if (pieces !== 0) {
+                    const pieceColor = pieces > 0 ? COLORS.white : COLORS.black;
+                    const count = Math.abs(pieces);
+                    const pieceSize = 22;
+                    const startY = isTop ? y + 28 : y + pointHeight - 28;
+                    const direction = isTop ? 1 : -1;
+                    
+                    for (let p = 0; p < Math.min(count, 5); p++) {  // Show max 5 visually
+                        const py = startY + (p * pieceSize * 0.75 * direction);
+                        
+                        // Piece shadow
+                        ctx.shadowColor = 'rgba(0,0,0,0.4)';
+                        ctx.shadowBlur = 4;
+                        ctx.shadowOffsetY = 2;
+                        
+                        ctx.fillStyle = pieceColor;
+                        ctx.beginPath();
+                        ctx.arc(x + pointWidth/2, py, pieceSize/2, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        ctx.shadowBlur = 0;
+                        ctx.shadowOffsetY = 0;
+                        
+                        // Highlight ring
+                        ctx.strokeStyle = pieces > 0 ? '#e0e7ff' : '#fda4af';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(x + pointWidth/2, py, pieceSize/2, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    
+                    // Show count if > 5
+                    if (count > 5) {
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 13px Inter, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(count, x + pointWidth/2, isTop ? y + pointHeight - 12 : y + 12);
+                    }
+                }
+            }
+
+            // Draw Bar (center)
+            const barX = margin + halfWidth - 18;
+            ctx.fillStyle = COLORS.bar;
+            ctx.fillRect(barX, margin + 40, 36, boardHeight - 80);
+            
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(barX, margin + 40, 36, boardHeight - 80);
+            
+            // Bar label
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '11px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('BAR', barX + 18, margin + 55);
+            
+            // Pieces on bar
+            if (bar.white > 0) {
+                ctx.fillStyle = COLORS.white;
+                ctx.beginPath();
+                ctx.arc(barX + 18, margin + 85, 14, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = '#1e2937';
+                ctx.font = 'bold 12px Inter';
+                ctx.fillText(bar.white, barX + 18, margin + 89);
+            }
+            if (bar.black > 0) {
+                ctx.fillStyle = COLORS.black;
+                ctx.beginPath();
+                ctx.arc(barX + 18, margin + boardHeight - 65, 14, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 12px Inter';
+                ctx.fillText(bar.black, barX + 18, margin + boardHeight - 61);
+            }
+
+            // Bear-off areas (right side for White, left for Black? Adjust visually)
+            // Simple bear off indicators on sides
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(margin - 8, margin + boardHeight/2 - 40, 20, 80); // Left bear off hint
+            ctx.fillRect(margin + boardWidth - 12, margin + boardHeight/2 - 40, 20, 80); // Right
+            
+            ctx.fillStyle = '#64748b';
+            ctx.font = '10px Inter';
+            ctx.fillText('OFF', margin + 2, margin + boardHeight/2 + 5);
+            ctx.fillText('OFF', margin + boardWidth - 18, margin + boardHeight/2 + 5);
+
+            // Bear off counts
+            ctx.fillStyle = COLORS.white;
+            ctx.font = 'bold 14px Inter';
+            ctx.fillText(off.white, margin + boardWidth - 5, margin + boardHeight/2 + 25);
+            
+            ctx.fillStyle = COLORS.black;
+            ctx.fillText(off.black, margin + 5, margin + boardHeight/2 - 15);
+        }
+
+        function getPointFromClick(x, y) {
+            const margin = 30;
+            const w = canvas.width;
+            const h = canvas.height;
+            const boardW = w - margin * 2;
+            const boardH = h - margin * 2;
+            const halfW = boardW / 2;
+            const pointW = halfW / 6;
+            const pointH = boardH * 0.42;
+
+            // Check bar first
+            const barX = margin + halfW - 18;
+            if (x > barX && x < barX + 36 && y > margin + 40 && y < margin + boardH - 40) {
+                return 'bar';
+            }
+
+            for (let i = 1; i <= 24; i++) {
+                const isTop = i > 12;
+                const col = ((i - 1) % 12);
+                let px = margin + (col * pointW) + (i > 12 ? halfW : 0);
+                let py = isTop ? margin : margin + boardH - pointH;
+
+                // Rough hit box for the point (triangle area)
+                if (x >= px && x <= px + pointW && 
+                    ((isTop && y >= py && y <= py + pointH) || 
+                     (!isTop && y >= py && y <= py + pointH))) {
+                    
+                    // Check if click is roughly in the triangle
+                    const centerX = px + pointW / 2;
+                    if (Math.abs(x - centerX) < pointW * 0.6) {
+                        return i;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function calculateLegalMoves(point) {
+            legalMoves = [];
+            if (!point || dice[0] === 0) return;
+
+            const isWhite = currentPlayer === 'white';
+            const direction = isWhite ? 1 : -1;
+            const homeStart = isWhite ? 19 : 1;
+            const homeEnd = isWhite ? 24 : 6;
+
+            for (let d = 0; d < 2; d++) {
+                if (diceUsed[d]) continue;
+                const die = dice[d];
+                if (die === 0) continue;
+
+                let target;
+                if (point === 'bar') {
+                    target = isWhite ? die : 25 - die;
+                } else {
+                    target = point + (die * direction);
+                }
+
+                if (target < 1 || target > 24) {
+                    // Check bearing off
+                    if (canBearOff(isWhite) && isBearingOffMove(point, die, isWhite)) {
+                        legalMoves.push({ from: point, to: 'off', dieIndex: d });
+                    }
+                    continue;
+                }
+
+                const targetPieces = board[target];
+                const isBlocked = (isWhite && targetPieces < -1) || (!isWhite && targetPieces > 1);
+
+                if (!isBlocked) {
+                    legalMoves.push({ from: point, to: target, dieIndex: d });
+                }
+            }
+        }
+
+        function isBearingOffMove(fromPoint, die, isWhite) {
+            if (!canBearOff(isWhite)) return false;
+            const homeStart = isWhite ? 19 : 1;
+            const homeEnd = isWhite ? 24 : 6;
+
+            if (fromPoint < homeStart || fromPoint > homeEnd) return false;
+
+            const needed = isWhite ? (fromPoint + die - 24) : (fromPoint - die);
+            return needed <= 0; // Exact or overshoot allowed in simple version
+        }
+
+        function canBearOff(isWhite) {
+            const homeStart = isWhite ? 19 : 1;
+            const homeEnd = isWhite ? 24 : 6;
+            for (let i = 1; i <= 24; i++) {
+                if (i < homeStart || i > homeEnd) {
+                    if ((isWhite && board[i] > 0) || (!isWhite && board[i] < 0)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function applyMove(move) {
+            const { from, to, dieIndex } = move;
+            const isWhite = currentPlayer === 'white';
+
+            // Remove piece from origin
+            if (from === 'bar') {
+                if (isWhite) bar.white--; else bar.black--;
+            } else {
+                board[from] += isWhite ? -1 : 1;
+            }
+
+            // Add to destination
+            if (to === 'off') {
+                if (isWhite) off.white++; else off.black++;
+            } else {
+                // Check for hit
+                const targetVal = board[to];
+                if ((isWhite && targetVal === -1) || (!isWhite && targetVal === 1)) {
+                    // Hit!
+                    if (isWhite) {
+                        bar.black++;
+                        board[to] = 1;
+                    } else {
+                        bar.white++;
+                        board[to] = -1;
+                    }
+                } else {
+                    board[to] += isWhite ? 1 : -1;
+                }
+            }
+
+            // Mark die as used
+            diceUsed[dieIndex] = true;
+            
+            selectedPoint = null;
+            legalMoves = [];
+            
+            drawBoard();
+            updateUI();
+
+            // Check win
+            if (off.white >= 15 || off.black >= 15) {
+                setTimeout(() => {
+                    const winner = off.white >= 15 ? 'White' : 'Black';
+                    alert(`${winner} wins! 🎉\n\nGreat game!`);
+                    restartGame();
+                }, 400);
+            }
+        }
+
+        function rollDice() {
+            if (dice[0] !== 0 && !diceUsed.every(u => u)) {
+                alert("You still have moves left!");
+                return;
+            }
+
+            dice[0] = Math.floor(Math.random() * 6) + 1;
+            dice[1] = Math.floor(Math.random() * 6) + 1;
+            diceUsed = [false, false];
+            selectedPoint = null;
+            legalMoves = [];
+
+            // Handle doubles (simple: give 4 moves of same value)
+            if (dice[0] === dice[1]) {
+                // For simplicity we just show two same dice. Full implementation can allow 4 moves.
+            }
+
+            updateUI();
+            drawBoard();
+            
+            document.getElementById('status-text').textContent = `You rolled ${dice[0]} and ${dice[1]}. Select a piece to move.`;
+        }
+
+        function endTurn() {
+            if (dice[0] === 0) {
+                alert("Roll the dice first!");
+                return;
+            }
+
+            // Switch player
+            currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
+            dice = [0, 0];
+            diceUsed = [false, false];
+            selectedPoint = null;
+            legalMoves = [];
+            
+            updateUI();
+            drawBoard();
+            
+            document.getElementById('status-text').textContent = `${currentPlayer === 'white' ? 'White' : 'Black'} to play. Roll the dice.`;
+        }
+
+        function handleCanvasClick(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            const clickedPoint = getPointFromClick(clickX, clickY);
+
+            if (!clickedPoint) return;
+
+            const isWhite = currentPlayer === 'white';
+
+            if (selectedPoint === null) {
+                // Selecting a piece
+                let hasPieces = false;
+                if (clickedPoint === 'bar') {
+                    hasPieces = isWhite ? bar.white > 0 : bar.black > 0;
+                } else {
+                    hasPieces = isWhite ? board[clickedPoint] > 0 : board[clickedPoint] < 0;
+                }
+
+                if (hasPieces && dice[0] > 0) {
+                    selectedPoint = clickedPoint;
+                    calculateLegalMoves(clickedPoint);
+                    drawBoard();
+                    highlightLegalMoves();
+                }
+            } else {
+                // Trying to move
+                const move = legalMoves.find(m => m.to === clickedPoint || (m.to === 'off' && clickedPoint === null));
+                
+                if (move) {
+                    applyMove(move);
+                } else {
+                    // Deselect or select new
+                    selectedPoint = null;
+                    legalMoves = [];
+                    drawBoard();
+                }
+            }
+        }
+
+        function highlightLegalMoves() {
+            // Re-draw board then overlay highlights
+            drawBoard();
+
+            const margin = 30;
+            const w = canvas.width;
+            const h = canvas.height;
+            const boardW = w - margin * 2;
+            const boardH = h - margin * 2;
+            const halfW = boardW / 2;
+            const pointW = halfW / 6;
+            const pointH = boardH * 0.42;
+
+            ctx.strokeStyle = COLORS.highlight;
+            ctx.lineWidth = 4;
+
+            legalMoves.forEach(move => {
+                let target = move.to;
+                if (target === 'off') {
+                    // Highlight bear-off area
+                    ctx.strokeRect(margin + boardW - 25, margin + boardH/2 - 50, 30, 100);
+                    return;
+                }
+
+                const isTop = target > 12;
+                const col = ((target - 1) % 12);
+                let x = margin + (col * pointW) + (target > 12 ? halfW : 0);
+                let y = isTop ? margin : margin + boardH - pointH;
+
+                ctx.beginPath();
+                if (isTop) {
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + pointW/2, y + pointH);
+                    ctx.lineTo(x + pointW, y);
+                } else {
+                    ctx.moveTo(x, y + pointH);
+                    ctx.lineTo(x + pointW/2, y);
+                    ctx.lineTo(x + pointW, y + pointH);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            });
+        }
+
+        function restartGame() {
+            if (confirm('Restart the game?')) {
+                initGame();
+            }
+        }
+
+        // Initialize everything
+        function startGame() {
+            initGame();
+            
+            // Click handler
+            canvas.addEventListener('click', handleCanvasClick);
+            
+            // Initial message
+            document.getElementById('status-text').textContent = 'White to start. Click "Roll Dice" to begin!';
+            
+            // Bonus: keyboard support
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'r' || e.key === 'R') rollDice();
+                if (e.key === 'e' || e.key === 'E') endTurn();
+            });
+
+            // Make sure first draw is good
+            setTimeout(() => {
+                drawBoard();
+            }, 100);
+        }
+
+        // Boot the game
+        window.onload = startGame;
+    </script>
+</body>
+</html>
