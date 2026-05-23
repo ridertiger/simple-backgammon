@@ -16,13 +16,6 @@
             font-weight: 600;
         }
 
-        #game-board {
-            border: 8px solid #334155;
-            border-radius: 12px;
-            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4);
-            background: #1e2937;
-        }
-
         .dice {
             width: 70px;
             height: 70px;
@@ -36,14 +29,7 @@
             font-weight: 700;
             color: #1e2937;
             border: 3px solid #64748b;
-        }
-
-        .point {
-            transition: all 0.1s ease;
-        }
-
-        .piece {
-            transition: transform 0.2s ease;
+            transition: all 0.2s ease;
         }
 
         .legal-move {
@@ -55,15 +41,15 @@
             50% { opacity: 0.6; }
         }
 
-        .backgammon-board {
-            background: linear-gradient(#334155, #1e2937);
+        .ai-thinking {
+            animation: thinking 1.2s infinite ease-in-out;
         }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200">
     <div class="max-w-[1100px] mx-auto px-4 py-8">
         <!-- Header -->
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center justify-between mb-4">
             <div>
                 <h1 class="title-font text-5xl font-semibold tracking-tighter">Backgammon</h1>
                 <p class="text-slate-400 mt-1">Simple • Playable • Classic</p>
@@ -81,6 +67,19 @@
             </div>
         </div>
 
+        <!-- Mode Selection -->
+        <div class="flex justify-center gap-x-3 mb-6">
+            <button onclick="setGameMode(false)" 
+                    class="mode-btn px-6 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold rounded-2xl transition-all active:scale-[0.985]" id="btn-pvp">
+                Play vs Friend
+            </button>
+            <button onclick="setGameMode(true)" 
+                    class="mode-btn px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 border border-emerald-700 font-semibold rounded-2xl transition-all active:scale-[0.985] flex items-center gap-x-2" id="btn-ai">
+                <span>Play vs AI</span>
+                <span class="text-xs bg-white/20 px-2 py-0.5 rounded-full">Black</span>
+            </button>
+        </div>
+
         <!-- Game Status -->
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-x-4">
@@ -90,7 +89,6 @@
                 </div>
                 
                 <div class="flex items-center gap-x-2">
-                    <!-- Dice -->
                     <div id="dice-container" class="flex gap-x-3">
                         <div id="die1" class="dice">?</div>
                         <div id="die2" class="dice">?</div>
@@ -99,7 +97,7 @@
             </div>
 
             <div class="flex gap-x-3">
-                <button onclick="rollDice()" 
+                <button onclick="rollDice()" id="btn-roll"
                         class="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 transition-all font-semibold rounded-2xl flex items-center gap-x-2 shadow-lg shadow-emerald-900/30">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7-7 7m-4-7l7 7-7 7" />
@@ -107,7 +105,7 @@
                     <span>Roll Dice</span>
                 </button>
                 
-                <button onclick="endTurn()" 
+                <button onclick="endTurn()" id="btn-end"
                         class="px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold rounded-2xl transition-all">
                     End Turn
                 </button>
@@ -128,15 +126,15 @@
         <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                 <div class="text-xs uppercase tracking-widest text-slate-500 mb-1">STATUS</div>
-                <div id="status-text" class="font-medium text-lg">Roll the dice to start</div>
+                <div id="status-text" class="font-medium text-lg">Choose a mode and roll the dice</div>
             </div>
             
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 col-span-2">
                 <div class="text-xs uppercase tracking-widest text-slate-500 mb-2">HOW TO PLAY</div>
-                <div class="text-sm text-slate-300 leading-relaxed">
+                <div class="text-sm text-slate-300 leading-relaxed" id="instructions">
                     1. Roll the dice → 2. Click one of <span class="text-white font-medium">your pieces</span> → 
                     3. Click a <span class="text-emerald-400 font-medium">highlighted</span> legal destination → 
-                    4. Repeat until dice are used → 5. Click <span class="font-semibold">End Turn</span>
+                    4. Click <span class="font-semibold">End Turn</span>
                 </div>
             </div>
         </div>
@@ -147,8 +145,8 @@
     </div>
 
     <script>
-        // Game State
-        let board = new Array(25).fill(0); // 1-24 points. Positive = White pieces, Negative = Black pieces
+        // ==================== GAME STATE ====================
+        let board = new Array(25).fill(0);
         let bar = { white: 0, black: 0 };
         let off = { white: 0, black: 0 };
         let currentPlayer = 'white';
@@ -156,11 +154,12 @@
         let diceUsed = [false, false];
         let selectedPoint = null;
         let legalMoves = [];
+        let vsAI = false;
+        let aiThinking = false;
 
         const canvas = document.getElementById('board');
         const ctx = canvas.getContext('2d');
 
-        // Colors
         const COLORS = {
             white: '#f8fafc',
             black: '#e11d48',
@@ -172,18 +171,11 @@
             bar: '#475569'
         };
 
+        // ==================== INITIALIZATION ====================
         function initGame() {
-            // Standard Backgammon starting position
-            // White (positive) moves 1->24, home = 19-24
-            // Black (negative) moves 24->1, home = 1-6
             board.fill(0);
             
-            // White pieces
-            board[1] = 2;   // 2 on point 1? Wait, standard is different.
-            // Correct standard setup:
-            // White: 5 on 6, 3 on 8, 5 on 13, 2 on 24
-            // Black: 5 on 19, 3 on 17, 5 on 12, 2 on 1   (mirrored)
-            
+            // Standard Backgammon starting position
             board[6] = 5;   // White
             board[8] = 3;   // White
             board[13] = 5;  // White
@@ -204,13 +196,48 @@
             diceUsed = [false, false];
             selectedPoint = null;
             legalMoves = [];
+            aiThinking = false;
             
             updateUI();
             drawBoard();
+            updateModeUI();
+        }
+
+        function setGameMode(isAI) {
+            vsAI = isAI;
+            updateModeUI();
+            restartGame();
+            
+            if (isAI) {
+                document.getElementById('status-text').textContent = 'You are White. Roll the dice to start against the AI!';
+            }
+        }
+
+        function updateModeUI() {
+            const btnPvp = document.getElementById('btn-pvp');
+            const btnAi = document.getElementById('btn-ai');
+            const whiteLabel = document.getElementById('white-player');
+            const blackLabel = document.getElementById('black-player');
+
+            if (vsAI) {
+                btnPvp.classList.remove('bg-emerald-600', 'border-emerald-700');
+                btnPvp.classList.add('bg-slate-800', 'border-slate-700');
+                btnAi.classList.add('bg-emerald-600', 'border-emerald-700');
+                btnAi.classList.remove('bg-slate-800', 'border-slate-700');
+                
+                whiteLabel.innerHTML = 'White (You)';
+                blackLabel.innerHTML = 'Black (AI)';
+            } else {
+                btnAi.classList.remove('bg-emerald-600', 'border-emerald-700');
+                btnAi.classList.add('bg-slate-800', 'border-slate-700');
+                btnPvp.classList.add('bg-emerald-600', 'border-emerald-700');
+                
+                whiteLabel.innerHTML = 'White (You)';
+                blackLabel.innerHTML = 'Black';
+            }
         }
 
         function updateUI() {
-            // Turn indicator
             const turnEl = document.getElementById('current-turn-text');
             const statusEl = document.getElementById('status-text');
             
@@ -218,19 +245,17 @@
                 turnEl.innerHTML = `White's Turn`;
                 turnEl.parentElement.style.borderColor = '#64748b';
             } else {
-                turnEl.innerHTML = `Black's Turn`;
+                turnEl.innerHTML = vsAI ? `AI's Turn` : `Black's Turn`;
                 turnEl.parentElement.style.borderColor = '#e11d48';
             }
 
-            // Status
             if (dice[0] === 0) {
-                statusEl.textContent = 'Roll the dice to begin your turn';
+                statusEl.textContent = aiThinking ? 'AI is thinking...' : 'Roll the dice to begin your turn';
             } else {
                 const remaining = diceUsed.filter(u => !u).length;
-                statusEl.textContent = `${remaining} move${remaining !== 1 ? 's' : ''} remaining`;
+                statusEl.textContent = aiThinking ? 'AI is moving...' : `${remaining} move${remaining !== 1 ? 's' : ''} remaining`;
             }
 
-            // Dice display
             document.getElementById('die1').textContent = dice[0] || '?';
             document.getElementById('die2').textContent = dice[1] || '?';
             
@@ -238,8 +263,24 @@
                 document.getElementById('die1').style.borderColor = diceUsed[0] ? '#64748b' : '#22c55e';
                 document.getElementById('die2').style.borderColor = diceUsed[1] ? '#64748b' : '#22c55e';
             }
+
+            // Disable buttons during AI turn
+            const rollBtn = document.getElementById('btn-roll');
+            const endBtn = document.getElementById('btn-end');
+            if (aiThinking) {
+                rollBtn.disabled = true;
+                endBtn.disabled = true;
+                rollBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                endBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                rollBtn.disabled = false;
+                endBtn.disabled = false;
+                rollBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                endBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
         }
 
+        // ==================== DRAWING ====================
         function drawBoard() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
@@ -249,21 +290,17 @@
             const boardWidth = w - margin * 2;
             const boardHeight = h - margin * 2;
             
-            // Background
             ctx.fillStyle = COLORS.boardDark;
             ctx.fillRect(margin, margin, boardWidth, boardHeight);
             
-            // Border
             ctx.strokeStyle = '#475569';
             ctx.lineWidth = 4;
             ctx.strokeRect(margin, margin, boardWidth, boardHeight);
             
-            // Divide into two halves
             const halfWidth = boardWidth / 2;
             const pointWidth = halfWidth / 6;
             const pointHeight = boardHeight * 0.42;
             
-            // Draw 24 points
             for (let i = 1; i <= 24; i++) {
                 const isTop = i > 12;
                 const col = ((i - 1) % 12);
@@ -272,19 +309,15 @@
                 let y = margin;
                 if (!isTop) y = margin + boardHeight - pointHeight;
                 
-                // Alternate colors
                 const isEven = (col % 2 === 0);
                 ctx.fillStyle = isEven ? COLORS.pointLight : COLORS.pointDark;
                 
-                // Draw triangle
                 ctx.beginPath();
                 if (isTop) {
-                    // Pointing down
                     ctx.moveTo(x, y);
                     ctx.lineTo(x + pointWidth/2, y + pointHeight);
                     ctx.lineTo(x + pointWidth, y);
                 } else {
-                    // Pointing up
                     ctx.moveTo(x, y + pointHeight);
                     ctx.lineTo(x + pointWidth/2, y);
                     ctx.lineTo(x + pointWidth, y + pointHeight);
@@ -292,12 +325,10 @@
                 ctx.closePath();
                 ctx.fill();
                 
-                // Point border
                 ctx.strokeStyle = '#0f172a';
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
                 
-                // Draw pieces on this point
                 const pieces = board[i];
                 if (pieces !== 0) {
                     const pieceColor = pieces > 0 ? COLORS.white : COLORS.black;
@@ -306,10 +337,9 @@
                     const startY = isTop ? y + 28 : y + pointHeight - 28;
                     const direction = isTop ? 1 : -1;
                     
-                    for (let p = 0; p < Math.min(count, 5); p++) {  // Show max 5 visually
+                    for (let p = 0; p < Math.min(count, 5); p++) {
                         const py = startY + (p * pieceSize * 0.75 * direction);
                         
-                        // Piece shadow
                         ctx.shadowColor = 'rgba(0,0,0,0.4)';
                         ctx.shadowBlur = 4;
                         ctx.shadowOffsetY = 2;
@@ -322,7 +352,6 @@
                         ctx.shadowBlur = 0;
                         ctx.shadowOffsetY = 0;
                         
-                        // Highlight ring
                         ctx.strokeStyle = pieces > 0 ? '#e0e7ff' : '#fda4af';
                         ctx.lineWidth = 2;
                         ctx.beginPath();
@@ -330,7 +359,6 @@
                         ctx.stroke();
                     }
                     
-                    // Show count if > 5
                     if (count > 5) {
                         ctx.fillStyle = 'white';
                         ctx.font = 'bold 13px Inter, sans-serif';
@@ -340,22 +368,19 @@
                 }
             }
 
-            // Draw Bar (center)
+            // Bar
             const barX = margin + halfWidth - 18;
             ctx.fillStyle = COLORS.bar;
             ctx.fillRect(barX, margin + 40, 36, boardHeight - 80);
-            
             ctx.strokeStyle = '#64748b';
             ctx.lineWidth = 2;
             ctx.strokeRect(barX, margin + 40, 36, boardHeight - 80);
             
-            // Bar label
             ctx.fillStyle = '#94a3b8';
             ctx.font = '11px Inter, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('BAR', barX + 18, margin + 55);
             
-            // Pieces on bar
             if (bar.white > 0) {
                 ctx.fillStyle = COLORS.white;
                 ctx.beginPath();
@@ -375,18 +400,16 @@
                 ctx.fillText(bar.black, barX + 18, margin + boardHeight - 61);
             }
 
-            // Bear-off areas (right side for White, left for Black? Adjust visually)
-            // Simple bear off indicators on sides
+            // Bear-off indicators
             ctx.fillStyle = '#475569';
-            ctx.fillRect(margin - 8, margin + boardHeight/2 - 40, 20, 80); // Left bear off hint
-            ctx.fillRect(margin + boardWidth - 12, margin + boardHeight/2 - 40, 20, 80); // Right
+            ctx.fillRect(margin - 8, margin + boardHeight/2 - 40, 20, 80);
+            ctx.fillRect(margin + boardWidth - 12, margin + boardHeight/2 - 40, 20, 80);
             
             ctx.fillStyle = '#64748b';
             ctx.font = '10px Inter';
             ctx.fillText('OFF', margin + 2, margin + boardHeight/2 + 5);
             ctx.fillText('OFF', margin + boardWidth - 18, margin + boardHeight/2 + 5);
 
-            // Bear off counts
             ctx.fillStyle = COLORS.white;
             ctx.font = 'bold 14px Inter';
             ctx.fillText(off.white, margin + boardWidth - 5, margin + boardHeight/2 + 25);
@@ -395,6 +418,7 @@
             ctx.fillText(off.black, margin + 5, margin + boardHeight/2 - 15);
         }
 
+        // ==================== GAME LOGIC ====================
         function getPointFromClick(x, y) {
             const margin = 30;
             const w = canvas.width;
@@ -405,7 +429,6 @@
             const pointW = halfW / 6;
             const pointH = boardH * 0.42;
 
-            // Check bar first
             const barX = margin + halfW - 18;
             if (x > barX && x < barX + 36 && y > margin + 40 && y < margin + boardH - 40) {
                 return 'bar';
@@ -417,14 +440,9 @@
                 let px = margin + (col * pointW) + (i > 12 ? halfW : 0);
                 let py = isTop ? margin : margin + boardH - pointH;
 
-                // Rough hit box for the point (triangle area)
-                if (x >= px && x <= px + pointW && 
-                    ((isTop && y >= py && y <= py + pointH) || 
-                     (!isTop && y >= py && y <= py + pointH))) {
-                    
-                    // Check if click is roughly in the triangle
+                if (x >= px && x <= px + pointW) {
                     const centerX = px + pointW / 2;
-                    if (Math.abs(x - centerX) < pointW * 0.6) {
+                    if (Math.abs(x - centerX) < pointW * 0.65) {
                         return i;
                     }
                 }
@@ -438,8 +456,6 @@
 
             const isWhite = currentPlayer === 'white';
             const direction = isWhite ? 1 : -1;
-            const homeStart = isWhite ? 19 : 1;
-            const homeEnd = isWhite ? 24 : 6;
 
             for (let d = 0; d < 2; d++) {
                 if (diceUsed[d]) continue;
@@ -454,7 +470,6 @@
                 }
 
                 if (target < 1 || target > 24) {
-                    // Check bearing off
                     if (canBearOff(isWhite) && isBearingOffMove(point, die, isWhite)) {
                         legalMoves.push({ from: point, to: 'off', dieIndex: d });
                     }
@@ -474,11 +489,10 @@
             if (!canBearOff(isWhite)) return false;
             const homeStart = isWhite ? 19 : 1;
             const homeEnd = isWhite ? 24 : 6;
-
             if (fromPoint < homeStart || fromPoint > homeEnd) return false;
 
-            const needed = isWhite ? (fromPoint + die - 24) : (fromPoint - die);
-            return needed <= 0; // Exact or overshoot allowed in simple version
+            const needed = isWhite ? (fromPoint + die - 24) : (fromPoint - die - 1);
+            return needed <= 0;
         }
 
         function canBearOff(isWhite) {
@@ -486,9 +500,7 @@
             const homeEnd = isWhite ? 24 : 6;
             for (let i = 1; i <= 24; i++) {
                 if (i < homeStart || i > homeEnd) {
-                    if ((isWhite && board[i] > 0) || (!isWhite && board[i] < 0)) {
-                        return false;
-                    }
+                    if ((isWhite && board[i] > 0) || (!isWhite && board[i] < 0)) return false;
                 }
             }
             return true;
@@ -498,53 +510,42 @@
             const { from, to, dieIndex } = move;
             const isWhite = currentPlayer === 'white';
 
-            // Remove piece from origin
             if (from === 'bar') {
                 if (isWhite) bar.white--; else bar.black--;
             } else {
                 board[from] += isWhite ? -1 : 1;
             }
 
-            // Add to destination
             if (to === 'off') {
                 if (isWhite) off.white++; else off.black++;
             } else {
-                // Check for hit
                 const targetVal = board[to];
                 if ((isWhite && targetVal === -1) || (!isWhite && targetVal === 1)) {
-                    // Hit!
-                    if (isWhite) {
-                        bar.black++;
-                        board[to] = 1;
-                    } else {
-                        bar.white++;
-                        board[to] = -1;
-                    }
+                    if (isWhite) { bar.black++; board[to] = 1; }
+                    else { bar.white++; board[to] = -1; }
                 } else {
                     board[to] += isWhite ? 1 : -1;
                 }
             }
 
-            // Mark die as used
             diceUsed[dieIndex] = true;
-            
             selectedPoint = null;
             legalMoves = [];
             
             drawBoard();
             updateUI();
 
-            // Check win
             if (off.white >= 15 || off.black >= 15) {
                 setTimeout(() => {
                     const winner = off.white >= 15 ? 'White' : 'Black';
-                    alert(`${winner} wins! 🎉\n\nGreat game!`);
+                    alert(`${winner} wins! 🎉`);
                     restartGame();
-                }, 400);
+                }, 350);
             }
         }
 
         function rollDice() {
+            if (aiThinking) return;
             if (dice[0] !== 0 && !diceUsed.every(u => u)) {
                 alert("You still have moves left!");
                 return;
@@ -556,24 +557,20 @@
             selectedPoint = null;
             legalMoves = [];
 
-            // Handle doubles (simple: give 4 moves of same value)
-            if (dice[0] === dice[1]) {
-                // For simplicity we just show two same dice. Full implementation can allow 4 moves.
-            }
-
             updateUI();
             drawBoard();
             
-            document.getElementById('status-text').textContent = `You rolled ${dice[0]} and ${dice[1]}. Select a piece to move.`;
+            const msg = vsAI && currentPlayer === 'black' ? 'AI rolled ' : 'You rolled ';
+            document.getElementById('status-text').textContent = `${msg}${dice[0]} and ${dice[1]}.`;
         }
 
         function endTurn() {
+            if (aiThinking) return;
             if (dice[0] === 0) {
                 alert("Roll the dice first!");
                 return;
             }
 
-            // Switch player
             currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
             dice = [0, 0];
             diceUsed = [false, false];
@@ -582,23 +579,174 @@
             
             updateUI();
             drawBoard();
-            
-            document.getElementById('status-text').textContent = `${currentPlayer === 'white' ? 'White' : 'Black'} to play. Roll the dice.`;
+
+            if (vsAI && currentPlayer === 'black') {
+                setTimeout(() => {
+                    aiPlay();
+                }, 650);
+            } else {
+                document.getElementById('status-text').textContent = `${currentPlayer === 'white' ? 'White' : 'Black'} to play. Roll the dice.`;
+            }
         }
 
+        // ==================== AI OPPONENT ====================
+        function aiPlay() {
+            if (!vsAI || currentPlayer !== 'black' || aiThinking) return;
+
+            aiThinking = true;
+            updateUI();
+            drawBoard();
+
+            dice[0] = Math.floor(Math.random() * 6) + 1;
+            dice[1] = Math.floor(Math.random() * 6) + 1;
+            diceUsed = [false, false];
+            selectedPoint = null;
+            legalMoves = [];
+
+            document.getElementById('status-text').textContent = `AI rolled ${dice[0]} and ${dice[1]}. Thinking...`;
+            updateUI();
+            drawBoard();
+
+            setTimeout(() => {
+                makeAIMove();
+            }, 450);
+        }
+
+        function makeAIMove() {
+            if (!aiThinking) return;
+
+            const bestMove = findBestAIMove();
+
+            if (bestMove) {
+                applyMove(bestMove);
+                
+                if (!diceUsed.every(u => u)) {
+                    setTimeout(() => {
+                        makeAIMove();
+                    }, 380);
+                } else {
+                    setTimeout(() => {
+                        aiThinking = false;
+                        endTurnForAI();
+                    }, 420);
+                }
+            } else {
+                aiThinking = false;
+                endTurnForAI();
+            }
+        }
+
+        function endTurnForAI() {
+            currentPlayer = 'white';
+            dice = [0, 0];
+            diceUsed = [false, false];
+            updateUI();
+            drawBoard();
+            document.getElementById('status-text').textContent = 'Your turn. Roll the dice!';
+        }
+
+        function findBestAIMove() {
+            let bestScore = -99999;
+            let bestMove = null;
+
+            const direction = -1;
+
+            // Priority: Get off bar
+            if (bar.black > 0) {
+                for (let d = 0; d < 2; d++) {
+                    if (diceUsed[d]) continue;
+                    const die = dice[d];
+                    const target = 25 - die;
+
+                    if (target >= 1 && target <= 24) {
+                        const targetPieces = board[target];
+                        if (!(targetPieces > 1)) {
+                            const score = scoreMove('bar', target, die, true);
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestMove = { from: 'bar', to: target, dieIndex: d };
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (let from = 1; from <= 24; from++) {
+                if (board[from] >= 0) continue;
+
+                for (let d = 0; d < 2; d++) {
+                    if (diceUsed[d]) continue;
+                    const die = dice[d];
+                    const target = from + (die * direction);
+
+                    if (target < 1 || target > 24) {
+                        if (canBearOff(true) && isBearingOffMove(from, die, false)) {
+                            const score = scoreMove(from, 'off', die, true) + 25;
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestMove = { from: from, to: 'off', dieIndex: d };
+                            }
+                        }
+                        continue;
+                    }
+
+                    const targetPieces = board[target];
+                    if (targetPieces > 1) continue;
+
+                    const score = scoreMove(from, target, die, true);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMove = { from: from, to: target, dieIndex: d };
+                    }
+                }
+            }
+
+            return bestMove;
+        }
+
+        function scoreMove(from, to, dieValue, isAI) {
+            let score = 0;
+
+            if (to !== 'off' && to !== 'bar') {
+                const targetVal = board[to];
+                if (targetVal === 1) score += 85;
+            }
+
+            if (to === 'off') {
+                score += 65 + dieValue * 3;
+            }
+
+            if (from === 'bar') {
+                score += 55;
+            }
+
+            if (from !== 'bar' && to !== 'off') {
+                score += (24 - to) * 1.8;
+            }
+
+            if (from !== 'bar' && board[from] === -1) {
+                if (from > 6) score -= 18;
+            }
+
+            score += dieValue * 0.8;
+
+            return score;
+        }
+
+        // ==================== HUMAN INPUT ====================
         function handleCanvasClick(e) {
+            if (aiThinking || (vsAI && currentPlayer === 'black')) return;
+
             const rect = canvas.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
             const clickY = e.clientY - rect.top;
 
             const clickedPoint = getPointFromClick(clickX, clickY);
-
             if (!clickedPoint) return;
 
             const isWhite = currentPlayer === 'white';
 
             if (selectedPoint === null) {
-                // Selecting a piece
                 let hasPieces = false;
                 if (clickedPoint === 'bar') {
                     hasPieces = isWhite ? bar.white > 0 : bar.black > 0;
@@ -613,13 +761,13 @@
                     highlightLegalMoves();
                 }
             } else {
-                // Trying to move
-                const move = legalMoves.find(m => m.to === clickedPoint || (m.to === 'off' && clickedPoint === null));
+                const move = legalMoves.find(m => 
+                    (m.to === clickedPoint) || (m.to === 'off' && clickedPoint === null)
+                );
                 
                 if (move) {
                     applyMove(move);
                 } else {
-                    // Deselect or select new
                     selectedPoint = null;
                     legalMoves = [];
                     drawBoard();
@@ -628,7 +776,6 @@
         }
 
         function highlightLegalMoves() {
-            // Re-draw board then overlay highlights
             drawBoard();
 
             const margin = 30;
@@ -646,7 +793,6 @@
             legalMoves.forEach(move => {
                 let target = move.to;
                 if (target === 'off') {
-                    // Highlight bear-off area
                     ctx.strokeRect(margin + boardW - 25, margin + boardH/2 - 50, 30, 100);
                     return;
                 }
@@ -672,34 +818,28 @@
         }
 
         function restartGame() {
-            if (confirm('Restart the game?')) {
+            if (confirm('Restart the current game?')) {
                 initGame();
             }
         }
 
-        // Initialize everything
+        // ==================== BOOT ====================
         function startGame() {
             initGame();
             
-            // Click handler
             canvas.addEventListener('click', handleCanvasClick);
             
-            // Initial message
-            document.getElementById('status-text').textContent = 'White to start. Click "Roll Dice" to begin!';
+            document.getElementById('status-text').textContent = 'Choose a mode above, then roll the dice to start!';
             
-            // Bonus: keyboard support
             document.addEventListener('keydown', function(e) {
-                if (e.key === 'r' || e.key === 'R') rollDice();
-                if (e.key === 'e' || e.key === 'E') endTurn();
+                if (aiThinking) return;
+                if (e.key.toLowerCase() === 'r') rollDice();
+                if (e.key.toLowerCase() === 'e') endTurn();
             });
 
-            // Make sure first draw is good
-            setTimeout(() => {
-                drawBoard();
-            }, 100);
+            setTimeout(() => drawBoard(), 80);
         }
 
-        // Boot the game
         window.onload = startGame;
     </script>
 </body>
